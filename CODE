@@ -1,0 +1,55 @@
+import streamlit as st
+import re
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# --- Title & Setup ---
+st.set_page_config(page_title="Semantic RAG Chatbot", page_icon="🧠")
+st.title("🧠 Semantic RAG Chatbot")
+st.write("Ask questions based on the provided knowledge base!")
+
+# --- Knowledge Base (you can replace or upload this later) ---
+document = """
+Photosynthesis is a process used by plants, algae, and certain bacteria to convert light energy into chemical energy,
+through a process that converts carbon dioxide and water into glucose (a sugar) and oxygen.
+This process is crucial for life on Earth as it produces most of the oxygen in the atmosphere.
+The chemical equation for photosynthesis is 6CO2 + 6H2O → C6H12O6 + 6O2.
+The process occurs in chloroplasts, which are small organelles found in plant cells.
+Chlorophyll is the green pigment inside chloroplasts that absorbs light energy.
+There are two main stages of photosynthesis: the light-dependent reactions and the Calvin cycle (light-independent reactions).
+Light-dependent reactions require sunlight to produce ATP and NADPH.
+The Calvin cycle uses the energy from these compounds to convert carbon dioxide into glucose.
+"""
+
+# --- Helper Functions ---
+def chunk_text(text, chunk_size=50):
+    words = text.split()
+    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
+def retrieve_chunks(query, chunks, model, top_k=2):
+    chunk_embeddings = model.encode(chunks)
+    query_embedding = model.encode([query])
+    similarities = cosine_similarity(query_embedding, chunk_embeddings)[0]
+    top_k_indices = np.argsort(similarities)[-top_k:][::-1]
+    return [chunks[i] for i in top_k_indices]
+
+def generate_response(query, context):
+    return (
+        f"**Question:** {query}\n\n"
+        f"**Answer:** Based on the retrieved context, it seems the answer involves biological processes "
+        f"such as photosynthesis, where plants convert light energy into chemical energy.\n\n"
+        f"**Context Used:**\n{context}"
+    )
+
+# --- Streamlit Interface ---
+user_query = st.text_input("💬 Enter your question:")
+
+if user_query:
+    with st.spinner("🔍 Processing your query..."):
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        chunks = chunk_text(document)
+        relevant_chunks = retrieve_chunks(user_query, chunks, model)
+        context = "\n---\n".join(relevant_chunks)
+        answer = generate_response(user_query, context)
+        st.markdown(answer)
